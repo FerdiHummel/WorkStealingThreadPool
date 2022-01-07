@@ -3,6 +3,7 @@ build
 .vscode
 .clangd
 .cache
+.idea
 compile_commands.json
 
 # Prerequisites
@@ -38,3 +39,5 @@ compile_commands.json
 *.out
 *.app
 
+# Folders
+output/*
