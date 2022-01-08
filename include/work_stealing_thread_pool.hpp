@@ -1,8 +1,9 @@
-#ifndef WORKSTEALINGTHREADPOOL_WORK_STEALING_THREAD_POOL_HPP
-#define WORKSTEALINGTHREADPOOL_WORK_STEALING_THREAD_POOL_HPP
+#ifndef WORK_STEALING_THREAD_POOL_HPP
+#define WORK_STEALING_THREAD_POOL_HPP
 
 #include <atomic>
 #include <future>
+#include <stdlib.h>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -18,18 +19,16 @@ namespace WorkStealingThreadPool{
         threadsafe_queue<task_type> pool_work_queue;
         std::vector<std::unique_ptr<threadsafe_queue<task_type>>> queues;
         std::vector<std::thread> threads;
-        static thread_local threadsafe_queue<task_type>* local_work_queue;
-        static thread_local unsigned index;
 
         void worker_thread(unsigned index_){
-            index=index_;
-            local_work_queue=queues[index].get();
+            unsigned index=index_;
+            auto local_work_queue= queues[index].get();
             while(!done){
-                run_pending_task();
+                run_pending_task(index, local_work_queue);
             }
         }
 
-        bool pop_task_from_local_queue(task_type& task){
+        bool pop_task_from_local_queue(task_type& task, threadsafe_queue<task_type>* local_work_queue){
             return local_work_queue && local_work_queue->try_pop(task);
         }
 
@@ -37,7 +36,7 @@ namespace WorkStealingThreadPool{
             return pool_work_queue.try_pop(task);
         }
 
-        bool pop_task_from_other_thread(task_type& task){
+        bool pop_task_from_other_thread(task_type& task, unsigned&  index){
             for(unsigned  i=0; i<queues.size(); ++i){
                 unsigned const idx=(index+i+1)%queues.size();
                 if(queues[idx]->try_pop(task)){
@@ -47,11 +46,11 @@ namespace WorkStealingThreadPool{
             return false;
         }
 
-        void run_pending_task(){
+        void run_pending_task(unsigned& index, threadsafe_queue<task_type>* local_work_queue){
             task_type task;
-            if(pop_task_from_local_queue(task) ||
+            if(pop_task_from_local_queue(task, local_work_queue) ||
                pop_task_from_pool_queue(task) ||
-               pop_task_from_other_thread(task)){
+               pop_task_from_other_thread(task, index)){
                 task();
             }
             else{
@@ -76,10 +75,13 @@ namespace WorkStealingThreadPool{
         };
 
         ~work_stealing_thread_pool(){
-            for(auto& thread : threads){
-                thread.join();
-            }
             done=true;
+            for(auto& thread : threads){
+                auto future = std::async(std::launch::async, &std::thread::join, &thread);
+                if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+                    // TODO terminate thread
+                }
+            }
         }
 
         template<typename FunctionType, typename... Args>
@@ -87,8 +89,10 @@ namespace WorkStealingThreadPool{
             typedef typename std::result_of<FunctionType(Args...)>::type result_type;
             std::packaged_task<result_type()> task(std::bind(std::forward<FunctionType>(f), std::forward<Args>(args) ... ));
             std::future<result_type> res(task.get_future());
-            if(local_work_queue){
-                local_work_queue->push(std::move(task));
+            unsigned queue_index = rand() % queues.size();
+            auto local_queue = queues[queue_index].get();
+            if(local_queue){
+                local_queue->push(std::move(task));
             }
             else{
                 pool_work_queue.push(std::move(task));
@@ -98,4 +102,4 @@ namespace WorkStealingThreadPool{
     };
 }
 
-#endif //WORKSTEALINGTHREADPOOL_WORK_STEALING_THREAD_POOL_HPP
+#endif //WORK_STEALING_THREAD_POOL_HPP

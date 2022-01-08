@@ -71,8 +71,11 @@ project(WorkStealingThreadPool
         DESCRIPTION ${project_description}
         LANGUAGES CXX)
 
+find_package(Threads REQUIRED)
 
 add_library(${PROJECT_NAME} INTERFACE)
+
+target_link_libraries(${PROJECT_NAME} INTERFACE Threads::Threads)
 
 #target_include_directories(
 #  ${PROJECT_NAME}

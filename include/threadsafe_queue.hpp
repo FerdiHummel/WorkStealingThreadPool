@@ -1,9 +1,8 @@
-#ifndef WORKSTEALINGTHREADPOOL_THREADSAFE_QUEUE_HPP
-#define WORKSTEALINGTHREADPOOL_THREADSAFE_QUEUE_HPP
+#ifndef THREADSAFE_QUEUE_HPP
+#define THREADSAFE_QUEUE_HPP
 
 #include <memory>
 #include <mutex>
-#include <condition_variable>
 
 namespace WorkStealingThreadPool{
 
@@ -19,7 +18,6 @@ namespace WorkStealingThreadPool{
         std::unique_ptr<node> head;
         std::mutex tail_mutex;
         node* tail;
-        std::condition_variable data_cond;
 
         node* get_tail(){
           std::lock_guard<std::mutex> tail_lock(tail_mutex);
@@ -61,7 +59,6 @@ namespace WorkStealingThreadPool{
                 tail->next=std::move(p);
                 tail=new_tail;
             }
-            data_cond.notify_one();
         }
 
         bool empty(){
@@ -70,6 +67,7 @@ namespace WorkStealingThreadPool{
         }
     };
 }
-#endif //WORKSTEALINGTHREADPOOL_THREADSAFE_QUEUE_HPP
+
+#endif //THREADSAFE_QUEUE_HPP
 
 
