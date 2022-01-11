@@ -19,6 +19,4 @@ target_include_directories(
 
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 
-enable_testing()
-
 add_subdirectory(test)

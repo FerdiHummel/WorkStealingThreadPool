@@ -42,7 +42,34 @@ namespace WorkStealingThreadPool{
     public:
         threadsafe_queue(): head(new node), tail(head.get()){};
         threadsafe_queue(const threadsafe_queue& other) = delete;
-        threadsafe_queue& operator=(const threadsafe_queue& other) = delete;
+        threadsafe_queue(threadsafe_queue&& other) noexcept : head(new node), tail(head.get()){
+            std::lock_guard<std::mutex> tail_lock(tail_mutex);
+            std::lock_guard<std::mutex> other_tail_lock(other.tail_mutex);
+            tail=std::move(other.tail);
+            std::lock_guard<std::mutex> head_lock(head_mutex);
+            std::lock_guard<std::mutex> other_head_lock(other.head_mutex);
+            head=std::move(other.head);
+            other.head = std::make_unique<node>();
+            other.tail = other.head.get();
+        };
+//        noexcept{
+//            std::lock_guard<std::mutex> tail_lock(tail_mutex);
+//            other.tail=std::move(tail);
+//            std::lock_guard<std::mutex> head_lock(head_mutex);
+//            other.head=std::move(head);
+//        }
+        threadsafe_queue& operator=(threadsafe_queue& other) = delete;
+        threadsafe_queue& operator=(threadsafe_queue&& other){
+            std::lock_guard<std::mutex> tail_lock(tail_mutex);
+            std::lock_guard<std::mutex> other_tail_lock(other.tail_mutex);
+            tail=std::move(other.tail);
+            std::lock_guard<std::mutex> head_lock(head_mutex);
+            std::lock_guard<std::mutex> other_head_lock(other.head_mutex);
+            head=std::move(other.head);
+            other.head = std::make_unique<node>();
+            other.tail = other.head.get();
+            return *this;
+        };
 
         bool try_pop(T& value){
             std::unique_ptr<node> const old_head=try_pop_head(value);
