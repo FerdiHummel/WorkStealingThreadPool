@@ -52,12 +52,6 @@ namespace WorkStealingThreadPool{
             other.head = std::make_unique<node>();
             other.tail = other.head.get();
         };
-//        noexcept{
-//            std::lock_guard<std::mutex> tail_lock(tail_mutex);
-//            other.tail=std::move(tail);
-//            std::lock_guard<std::mutex> head_lock(head_mutex);
-//            other.head=std::move(head);
-//        }
         threadsafe_queue& operator=(threadsafe_queue& other) = delete;
         threadsafe_queue& operator=(threadsafe_queue&& other){
             std::lock_guard<std::mutex> tail_lock(tail_mutex);
