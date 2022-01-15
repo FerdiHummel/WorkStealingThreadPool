@@ -3,9 +3,9 @@
 
 #include <atomic>
 #include <future>
-#include <stdlib.h>
 #include <functional>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "function_wrapper.hpp"
@@ -29,7 +29,7 @@ namespace WorkStealingThreadPool{
         }
 
         bool pop_task_from_local_queue(task_type& task, threadsafe_queue<task_type>* local_work_queue){
-            return local_work_queue && local_work_queue->try_pop(task);
+            return local_work_queue->try_pop(task);
         }
 
         bool pop_task_from_pool_queue(task_type& task){
@@ -58,6 +58,23 @@ namespace WorkStealingThreadPool{
             }
         }
 
+        void join_threads(){
+            for(auto& thread : threads){
+                if(thread.joinable()){
+                    thread.join();
+                }
+            }
+        }
+
+        template<typename NumericType, typename Generator = std::mt19937>
+        NumericType random_number(NumericType lower, NumericType upper)
+        {
+            thread_local static Generator gen(std::random_device{}());
+            using distType = typename std::conditional<std::is_integral<NumericType>::value, std::uniform_int_distribution<NumericType>, std::uniform_real_distribution<NumericType>>::type;
+            thread_local static distType dist;
+            return dist(gen, typename distType::param_type{lower, upper});
+        }
+
     public:
         explicit work_stealing_thread_pool(unsigned const thread_count = std::thread::hardware_concurrency()): done(false){
             try{
@@ -76,12 +93,7 @@ namespace WorkStealingThreadPool{
 
         ~work_stealing_thread_pool(){
             done=true;
-            for(auto& thread : threads){
-                auto future = std::async(std::launch::async, &std::thread::join, &thread);
-                if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-                    // TODO terminate thread
-                }
-            }
+            join_threads();
         }
 
         template<typename FunctionType, typename... Args>
@@ -89,7 +101,7 @@ namespace WorkStealingThreadPool{
             typedef typename std::result_of<FunctionType(Args...)>::type result_type;
             std::packaged_task<result_type()> task(std::bind(std::forward<FunctionType>(f), std::forward<Args>(args) ... ));
             std::future<result_type> res(task.get_future());
-            unsigned queue_index = rand() % queues.size();
+            auto queue_index = random_number<unsigned>(0, queues.size());
             auto local_queue = queues[queue_index].get();
             if(local_queue){
                 local_queue->push(std::move(task));

@@ -80,6 +80,6 @@ TEST(WorkStealingThreadPoolTest, MultipleThreadsLightWorkloadPartialJobs)
 TEST(WorkStealingThreadPoolTest, MultipleThreadsLightWorkloadEnoughJobs)
 {
     auto num_threads = std::thread::hardware_concurrency();
-    auto jobs = num_threads * 2;
+    auto jobs = num_threads * 100;
     test_function(num_threads, jobs, 1, false);
 }
