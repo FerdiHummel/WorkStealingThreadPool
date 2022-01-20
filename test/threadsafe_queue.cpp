@@ -1,7 +1,9 @@
-#define BOOST_TEST_MODULE ThreadSafeQueueTest
-#include <boost/test/unit_test.hpp>
 #include <future>
 #include <memory>
+#include <chrono>
+#include <thread>
+
+#include "gtest/gtest.h"
 
 #include "threadsafe_queue.hpp"
 
@@ -9,15 +11,16 @@ using namespace WorkStealingThreadPool;
 
 void test_function(int pop_threads = 1,
                    int push_threads = 1,
-                   int queue_size = 0)
+                   int queue_size = 0,
+                   std::optional<std::function<void(threadsafe_queue<int>&)>> check_queue = {})
 {
-    auto q = new threadsafe_queue<int>();
+    threadsafe_queue<int> q{};
     for(int i=0; i < queue_size; ++i){
-        q->push(i);
+        q.push(i);
     }
     std::vector<int> results;
     for(int i=0; i<pop_threads; ++i) {
-        results.push_back(0);
+        results.push_back(i);
     }
     std::vector<std::promise<void>> push_ready, pop_ready;
     std::vector<std::future<void>> push_done;
@@ -40,7 +43,7 @@ void test_function(int pop_threads = 1,
                                            {
                                                push.set_value();
                                                ready.wait();
-                                               q->push(100);
+                                               q.push(100);
                                            }));
         }
 
@@ -50,7 +53,7 @@ void test_function(int pop_threads = 1,
                                           {
                                               pop_ready[i].set_value();
                                               ready.wait();
-                                              return q->try_pop(results[i]);
+                                              return q.try_pop(results[i]);
                                           }));
         }
 
@@ -67,90 +70,168 @@ void test_function(int pop_threads = 1,
         go.set_value();
         throw;
     }
+
+    if(check_queue.has_value()){
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto f = check_queue.value();
+        f(q);
+    }
 }
 
-BOOST_AUTO_TEST_CASE(SingleThreadPushEmptyQueue)
+TEST(ThreadSafeQueueTest, MoveConstructor)
 {
-    test_function(0);
+    threadsafe_queue<int> q1{};
+    q1.push(1);
+    threadsafe_queue<int> q2(std::move(q1));
+    assert(q1.empty());
+    assert(!q2.empty());
+    auto result = 0;
+    auto success = q2.try_pop(result);
+    assert(result == 1);
+    assert(success);
 }
 
-BOOST_AUTO_TEST_CASE(SingleThreadPushFullQueue)
+TEST(ThreadSafeQueueTest, MoveAssign)
 {
-    test_function(0, 1, 1000);
+    threadsafe_queue<int> q1{};
+    q1.push(1);
+    threadsafe_queue<int> q2 = std::move(q1);
+    assert(q1.empty());
+    assert(!q2.empty());
+    auto result = 0;
+    auto success = q2.try_pop(result);
+    assert(result == 1);
+    assert(success);
 }
 
-BOOST_AUTO_TEST_CASE(SingleThreadEmpty)
+
+TEST(ThreadSafeQueueTest, SingleThreadPushEmptyQueue)
+{
+    auto f = [&](threadsafe_queue<int>& q){ assert(!q.empty());};
+    test_function(0, 1, 0, f);
+}
+
+TEST(ThreadSafeQueueTest, SingleThreadPushFullQueue)
+{
+    auto f = [&](threadsafe_queue<int>& q){
+        for(unsigned  i=0; i<6; ++i){
+            int val = -1;
+            auto success = q.try_pop(val);
+            assert(success);
+            assert(val != -1);
+        }};
+    test_function(0, 1, 5, f);
+}
+
+TEST(ThreadSafeQueueTest, SingleThreadEmpty)
 {
     auto queue = new threadsafe_queue<int>();
     assert(queue->empty());
 }
 
-BOOST_AUTO_TEST_CASE(SingleThreadPopEmptyQueue)
+TEST(ThreadSafeQueueTest, SingleThreadPopEmptyQueue)
 {
-    test_function(1, 0);
+    test_function(1, 0, 0);
 }
 
-BOOST_AUTO_TEST_CASE(SingleThreadPopFullQueue)
+TEST(ThreadSafeQueueTest, SingleThreadPopFullQueue)
 {
-    test_function(1, 0, 1000);
+    auto pop_threads = 1;
+    auto queue_size = 100;
+    auto f = [&](threadsafe_queue<int>& q){
+        for(unsigned  i=0; i<queue_size-pop_threads; ++i){
+            int val = -1;
+            auto success = q.try_pop(val);
+            assert(success);
+            assert(val != -1);
+        }};
+    test_function(pop_threads, 0, queue_size, f);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndPopOnEmptyQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushAndPopOnEmptyQueue)
 {
     test_function();
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndPopOnFullQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushAndPopOnFullQueue)
 {
     test_function(1,1, 1000);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushOnEmptyQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushOnEmptyQueue)
 {
-    test_function(0, std::thread::hardware_concurrency());
+    auto num_threads = std::thread::hardware_concurrency();
+    auto f = [&](threadsafe_queue<int>& q){
+        for(unsigned  i=0; i<num_threads; ++i){
+            int val = -1;
+            auto success = q.try_pop(val);
+            assert(success);
+            assert(val != -1);
+        }};
+    test_function(0, num_threads, 0, f);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushOnFullQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushOnFullQueue)
 {
-    test_function(0, std::thread::hardware_concurrency(), 1000);
+    auto num_threads = std::thread::hardware_concurrency();
+    auto queue_size = 100;
+    auto f = [&](threadsafe_queue<int>& q){
+        for(unsigned  i=0; i<num_threads+queue_size; ++i){
+            int val = -1;
+            auto success = q.try_pop(val);
+            assert(success);
+            assert(val != -1);
+        }};
+    test_function(0, num_threads, queue_size, f);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPophOnEmptyQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPophOnEmptyQueue)
 {
     test_function(std::thread::hardware_concurrency(), 0);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPopOnFullQueue)
-{
-    test_function(std::thread::hardware_concurrency(), 0, 1000);
-}
-
-
-BOOST_AUTO_TEST_CASE(ConcurrentPopOnPartiallyFullQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPopOnFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
-    test_function(num_threads, 0, num_threads/2);
+    auto queue_size = 100;
+    auto f = [&](threadsafe_queue<int>& q){
+        for(unsigned  i=0; i<queue_size - num_threads; ++i){
+            int val = -1;
+            auto success = q.try_pop(val);
+            assert(success);
+            assert(val != -1);
+        }};
+    test_function(num_threads, 0, queue_size);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndSinglePopOnEmptyQueue)
+
+TEST(ThreadSafeQueueTest, ConcurrentPopOnPartiallyFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
-    test_function(1, num_threads-1, num_threads/2);
+    auto queue_size = num_threads/2;
+    auto f = [&](threadsafe_queue<int>& q){ assert(q.empty());};
+    test_function(num_threads, 0, queue_size, f);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndSinglePopOnFullQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushAndSinglePopOnEmptyQueue)
+{
+    auto num_threads = std::thread::hardware_concurrency();
+    test_function(1, num_threads-1, 0);
+}
+
+TEST(ThreadSafeQueueTest, ConcurrentPushAndSinglePopOnFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     test_function(1, num_threads-1,  1000);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndPophOnEmptyQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushAndPophOnEmptyQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     test_function(num_threads/2, num_threads/2);
 }
 
-BOOST_AUTO_TEST_CASE(ConcurrentPushAndPophOnFullQueue)
+TEST(ThreadSafeQueueTest, ConcurrentPushAndPophOnFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     test_function(num_threads/2, num_threads/2, 1000);
