@@ -8,13 +8,12 @@
 #include <random>
 #include <vector>
 
-#include "function_wrapper.hpp"
 #include "threadsafe_queue.hpp"
 
 namespace WorkStealingThreadPool{
 
     class work_stealing_thread_pool{
-        typedef function_wrapper task_type;
+        typedef std::function<void()> task_type;
         std::atomic_bool done;
         threadsafe_queue<task_type> pool_work_queue;
         std::vector<std::unique_ptr<threadsafe_queue<task_type>>> queues;
@@ -96,18 +95,25 @@ namespace WorkStealingThreadPool{
             join_threads();
         }
 
-        template<typename FunctionType, typename... Args>
-        std::future<typename std::result_of<FunctionType(Args...)>::type> submit(FunctionType f, Args... args){
-            typedef typename std::result_of<FunctionType(Args...)>::type result_type;
-            std::packaged_task<result_type()> task(std::bind(std::forward<FunctionType>(f), std::forward<Args>(args) ... ));
-            std::future<result_type> res(task.get_future());
+        template<typename F, typename... Args>
+        std::future<typename std::result_of<F(Args...)>::type> submit(F f, Args... args){
+            typedef typename std::result_of<F(Args...)>::type result_type;
+            auto task = std::make_shared<std::packaged_task<result_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args) ... ));
+            auto res(task->get_future());
+
+            auto task_ =
+                    [task]()
+                    {
+                        (*task)();
+                    };
+
             auto queue_index = random_number<unsigned>(0, queues.size());
             auto local_queue = queues[queue_index].get();
             if(local_queue){
-                local_queue->push(std::move(task));
+                local_queue->push(std::move(task_));
             }
             else{
-                pool_work_queue.push(std::move(task));
+                pool_work_queue.push(std::move(task_));
             }
             return res;
         }
