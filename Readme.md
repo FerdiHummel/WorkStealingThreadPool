@@ -35,4 +35,6 @@ auto result = future.get();
 ```
 
 ## References
-[^1]: ...
+[^1]:  <a id="1">[1]</a> 
+Anthony Williams (2012)
+C++ Concurrency in Action
