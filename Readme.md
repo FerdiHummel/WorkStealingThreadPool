@@ -35,6 +35,4 @@ auto result = future.get();
 ```
 
 ## References
-[^1]: 
-Anthony Williams (2012), Manning ISBN 9781933988771,  
-C++ Concurrency in Action
+[^1]: Anthony Williams (2012), Manning ISBN 9781933988771, C++ Concurrency in Action
