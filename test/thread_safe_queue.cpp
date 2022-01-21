@@ -5,16 +5,16 @@
 
 #include "gtest/gtest.h"
 
-#include "threadsafe_queue.hpp"
+#include "thread_safe_queue.hpp"
 
 using namespace WorkStealingThreadPool;
 
 void test_function(int pop_threads = 1,
                    int push_threads = 1,
                    int queue_size = 0,
-                   std::optional<std::function<void(threadsafe_queue<int>&)>> check_queue = {})
+                   std::optional<std::function<void(thread_safe_queue<int>&)>> check_queue = {})
 {
-    threadsafe_queue<int> q{};
+    thread_safe_queue<int> q{};
     for(int i=0; i < queue_size; ++i){
         q.push(i);
     }
@@ -80,9 +80,9 @@ void test_function(int pop_threads = 1,
 
 TEST(ThreadSafeQueueTest, MoveConstructor)
 {
-    threadsafe_queue<int> q1{};
+    thread_safe_queue<int> q1{};
     q1.push(1);
-    threadsafe_queue<int> q2(std::move(q1));
+    thread_safe_queue<int> q2(std::move(q1));
     assert(q1.empty());
     assert(!q2.empty());
     auto result = 0;
@@ -93,9 +93,9 @@ TEST(ThreadSafeQueueTest, MoveConstructor)
 
 TEST(ThreadSafeQueueTest, MoveAssign)
 {
-    threadsafe_queue<int> q1{};
+    thread_safe_queue<int> q1{};
     q1.push(1);
-    threadsafe_queue<int> q2 = std::move(q1);
+    thread_safe_queue<int> q2 = std::move(q1);
     assert(q1.empty());
     assert(!q2.empty());
     auto result = 0;
@@ -107,13 +107,13 @@ TEST(ThreadSafeQueueTest, MoveAssign)
 
 TEST(ThreadSafeQueueTest, SingleThreadPushEmptyQueue)
 {
-    auto f = [&](threadsafe_queue<int>& q){ assert(!q.empty());};
+    auto f = [&](thread_safe_queue<int>& q){ assert(!q.empty());};
     test_function(0, 1, 0, f);
 }
 
 TEST(ThreadSafeQueueTest, SingleThreadPushFullQueue)
 {
-    auto f = [&](threadsafe_queue<int>& q){
+    auto f = [&](thread_safe_queue<int>& q){
         for(unsigned  i=0; i<6; ++i){
             int val = -1;
             auto success = q.try_pop(val);
@@ -125,7 +125,7 @@ TEST(ThreadSafeQueueTest, SingleThreadPushFullQueue)
 
 TEST(ThreadSafeQueueTest, SingleThreadEmpty)
 {
-    auto queue = new threadsafe_queue<int>();
+    auto queue = new thread_safe_queue<int>();
     assert(queue->empty());
 }
 
@@ -138,7 +138,7 @@ TEST(ThreadSafeQueueTest, SingleThreadPopFullQueue)
 {
     auto pop_threads = 1;
     auto queue_size = 100;
-    auto f = [&](threadsafe_queue<int>& q){
+    auto f = [&](thread_safe_queue<int>& q){
         for(unsigned  i=0; i<queue_size-pop_threads; ++i){
             int val = -1;
             auto success = q.try_pop(val);
@@ -161,7 +161,7 @@ TEST(ThreadSafeQueueTest, ConcurrentPushAndPopOnFullQueue)
 TEST(ThreadSafeQueueTest, ConcurrentPushOnEmptyQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
-    auto f = [&](threadsafe_queue<int>& q){
+    auto f = [&](thread_safe_queue<int>& q){
         for(unsigned  i=0; i<num_threads; ++i){
             int val = -1;
             auto success = q.try_pop(val);
@@ -175,7 +175,7 @@ TEST(ThreadSafeQueueTest, ConcurrentPushOnFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     auto queue_size = 100;
-    auto f = [&](threadsafe_queue<int>& q){
+    auto f = [&](thread_safe_queue<int>& q){
         for(unsigned  i=0; i<num_threads+queue_size; ++i){
             int val = -1;
             auto success = q.try_pop(val);
@@ -194,7 +194,7 @@ TEST(ThreadSafeQueueTest, ConcurrentPopOnFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     auto queue_size = 100;
-    auto f = [&](threadsafe_queue<int>& q){
+    auto f = [&](thread_safe_queue<int>& q){
         for(unsigned  i=0; i<queue_size - num_threads; ++i){
             int val = -1;
             auto success = q.try_pop(val);
@@ -209,7 +209,7 @@ TEST(ThreadSafeQueueTest, ConcurrentPopOnPartiallyFullQueue)
 {
     auto num_threads = std::thread::hardware_concurrency();
     auto queue_size = num_threads/2;
-    auto f = [&](threadsafe_queue<int>& q){ assert(q.empty());};
+    auto f = [&](thread_safe_queue<int>& q){ assert(q.empty());};
     test_function(num_threads, 0, queue_size, f);
 }
 
