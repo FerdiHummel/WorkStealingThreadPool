@@ -22,7 +22,6 @@ find_package(WorkStealingThreadPool REQUIRED)
 ## Usage
 
 ```C++
-#include <iostream>
 #include "work_stealing_thread_pool.hpp"
 
 ...
