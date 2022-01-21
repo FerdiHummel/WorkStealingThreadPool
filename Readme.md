@@ -6,7 +6,7 @@ A fast and lightweight work stealing thread pool based on the book "Concurrency 
 To build, install and run the tests:
 
 ```zsh
-git clone https://github.com/fhummel86/WorkStealingThreadPool.git
+git clone https://github.com/FerdiHummel/WorkStealingThreadPool.git
 cd WorkStealingThreadPool
 mkdir build && cd build
 cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release  ..
