@@ -7,11 +7,11 @@ project(WorkStealingThreadPool
         DESCRIPTION "A work stealing thread pool."
         LANGUAGES CXX)
 
-include(${PROJECT_SOURCE_DIR}/cmake/threads.cmake)
+find_package(Threads REQUIRED)
 
 add_library(${PROJECT_NAME} INTERFACE)
 
-target_link_libraries(${PROJECT_NAME} INTERFACE Threads::Threads)
+target_link_libraries(${PROJECT_NAME} INTERFACE ${CMAKE_THREAD_LIBS_INIT})
 
 target_include_directories(${PROJECT_NAME} INTERFACE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
