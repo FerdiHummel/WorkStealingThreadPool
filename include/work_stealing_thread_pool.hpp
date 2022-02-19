@@ -19,23 +19,26 @@ namespace WorkStealingThreadPool{
         std::vector<std::unique_ptr<thread_safe_queue<task_type>>> queues;
         std::vector<std::thread> threads;
 
+        inline static thread_local thread_safe_queue<task_type>* local_work_queue = nullptr;
+        inline static thread_local unsigned index = 0;
+
         void worker_thread(unsigned index_){
-            unsigned index=index_;
-            auto local_work_queue= queues[index].get();
+            index=index_;
+            local_work_queue = queues[index].get();
             while(!done){
-                run_pending_task(index, local_work_queue);
+                run_pending_task();
             }
         }
 
-        bool pop_task_from_local_queue(task_type& task, thread_safe_queue<task_type>* local_work_queue){
-            return local_work_queue->try_pop(task);
+        bool pop_task_from_local_queue(task_type& task){
+            return local_work_queue && local_work_queue->try_pop(task);
         }
 
         bool pop_task_from_pool_queue(task_type& task){
             return pool_work_queue.try_pop(task);
         }
 
-        bool pop_task_from_other_thread(task_type& task, unsigned&  index){
+        bool pop_task_from_other_thread(task_type& task){
             for(unsigned  i=0; i<queues.size(); ++i){
                 unsigned const idx=(index+i+1)%queues.size();
                 if(queues[idx]->try_pop(task)){
@@ -45,11 +48,11 @@ namespace WorkStealingThreadPool{
             return false;
         }
 
-        void run_pending_task(unsigned& index, thread_safe_queue<task_type>* local_work_queue){
+        void run_pending_task(){
             task_type task;
-            if(pop_task_from_local_queue(task, local_work_queue) ||
+            if(pop_task_from_local_queue(task) ||
                pop_task_from_pool_queue(task) ||
-               pop_task_from_other_thread(task, index)){
+               pop_task_from_other_thread(task)){
                 task();
             }
             else{
@@ -63,15 +66,6 @@ namespace WorkStealingThreadPool{
                     thread.join();
                 }
             }
-        }
-
-        template<typename NumericType, typename Generator = std::mt19937>
-        NumericType random_number(NumericType lower, NumericType upper)
-        {
-            thread_local static Generator gen(std::random_device{}());
-            using distType = typename std::conditional<std::is_integral<NumericType>::value, std::uniform_int_distribution<NumericType>, std::uniform_real_distribution<NumericType>>::type;
-            thread_local static distType dist;
-            return dist(gen, typename distType::param_type{lower, upper});
         }
 
     public:
@@ -107,10 +101,8 @@ namespace WorkStealingThreadPool{
                         (*task)();
                     };
 
-            auto queue_index = random_number<unsigned>(0, queues.size());
-            auto local_queue = queues[queue_index].get();
-            if(local_queue){
-                local_queue->push(std::move(task_));
+            if(local_work_queue){
+                local_work_queue->push(std::move(task_));
             }
             else{
                 pool_work_queue.push(std::move(task_));
